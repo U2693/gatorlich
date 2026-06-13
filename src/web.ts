@@ -52,7 +52,13 @@ setInterval(() => {
   const deltaSeconds = driftInterval / 1000;
 
   if (now - lastRetune > nextRetuneIn) {
-    targetFrequency = randomBetween(band.min, band.max);
+    const mikeActive = now >= mikePresence.start && now <= mikePresence.end;
+    if (mikeActive && rng() < 0.55) {
+      targetFrequency =
+        mikePresence.frequency + randomBetween(-2.5, 2.5);
+    } else {
+      targetFrequency = randomBetween(band.min, band.max);
+    }
     lastRetune = now;
     nextRetuneIn = retuneEvery();
   }
@@ -77,7 +83,7 @@ setInterval(() => {
     propagation: mikePresence.propagation
   });
 
-  if (signalStrength > 0.6 && now - lastMessageAt > 1800) {
+  if (signalStrength > 0.45 && now - lastMessageAt > 1800) {
     lastMessageAt = now;
     const message = nextMikeGroup(rng).text;
     appendLog(`MIKE ${message}`);
@@ -91,7 +97,7 @@ function computeSignal(frequency: number, now: number) {
 
   if (active) {
     const delta = Math.abs(frequency - mikePresence.frequency);
-    tuneFactor = clamp(1 - delta / 1.2, 0, 1);
+    tuneFactor = clamp(1 - delta / 8, 0, 1);
     propagation = mikePresence.propagation;
   }
 
