@@ -37,6 +37,10 @@ bun run build
 bun run start
 ```
 
+## GitHub Pages
+
+The site deploys from the `main` branch via GitHub Actions to GitHub Pages.
+
 ## Status
 
 Station MIKE implemented with a basic radio UI, random tuning, and simulated noise/propagation.
