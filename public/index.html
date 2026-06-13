@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gatorlich — shortwave radio</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="radio">
+      <header class="radio__header">
+        <h1>gatorlich</h1>
+        <p>Shortwave receiver — scanning the bands</p>
+      </header>
+
+      <section class="radio__display">
+        <div class="frequency">
+          <span class="frequency__label">Frequency</span>
+          <span id="frequency" class="frequency__value">--</span>
+          <span class="frequency__unit">kHz</span>
+        </div>
+        <div class="signal">
+          <span class="signal__label">Signal</span>
+          <div class="signal__meter">
+            <div id="signal-bar" class="signal__bar"></div>
+          </div>
+          <span id="signal-text" class="signal__value">--</span>
+        </div>
+        <div class="station">
+          <span class="station__label">Station</span>
+          <span id="station" class="station__value">Searching...</span>
+        </div>
+      </section>
+
+      <section class="radio__log">
+        <h2>Intercepts</h2>
+        <div id="log" class="log"></div>
+      </section>
+
+      <section class="radio__atmosphere">
+        <div>
+          <span class="atmosphere__label">Atmospheric noise</span>
+          <span id="noise" class="atmosphere__value">--</span>
+        </div>
+        <div>
+          <span class="atmosphere__label">Propagation</span>
+          <span id="propagation" class="atmosphere__value">--</span>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

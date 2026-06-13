@@ -21,13 +21,22 @@ A browser-based shortwave radio vignette that drifts across frequencies and catc
 - Five-symbol groups drawn from `1 3 5 7 9`.
 - Rarely emits the word `fifteen` instead of a digit.
 
-## Build
+## Serve
 
 ```bash
 bun install
+bun run dev
+```
+
+Open `http://localhost:7890`.
+
+## Build
+
+```bash
 bun run build
+bun run start
 ```
 
 ## Status
 
-Project scaffolding in progress. Next steps: set up the web app shell and implement the tuning engine.
+Station MIKE implemented with a basic radio UI, random tuning, and simulated noise/propagation.
