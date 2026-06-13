@@ -46,6 +46,8 @@ let targetFrequency = randomBetween(band.min, band.max);
 let lastRetune = performance.now();
 let lastMessageAt = 0;
 let lastSpokenAt = 0;
+let holdUntil = 0;
+let lockedPresence: Presence | null = null;
 
 interface Presence {
   station: "MIKE" | "CARLO";
@@ -70,8 +72,14 @@ let nextRetuneIn = retuneEvery();
 setInterval(() => {
   const now = performance.now();
   const deltaSeconds = driftInterval / 1000;
+  const holdActive = holdUntil > now;
 
-  if (now - lastRetune > nextRetuneIn) {
+  if (!holdActive && holdUntil !== 0 && now >= holdUntil) {
+    holdUntil = 0;
+    lockedPresence = null;
+  }
+
+  if (!holdActive && now - lastRetune > nextRetuneIn) {
     const activePresences = presences.filter(
       (presence) => now >= presence.start && now <= presence.end
     );
@@ -88,15 +96,19 @@ setInterval(() => {
     nextRetuneIn = retuneEvery();
   }
 
-  const drift = (targetFrequency - currentFrequency) * 0.08;
-  currentFrequency += drift * deltaSeconds * 5;
+  if (!holdActive) {
+    const drift = (targetFrequency - currentFrequency) * 0.08;
+    currentFrequency += drift * deltaSeconds * 5;
+  } else if (lockedPresence) {
+    currentFrequency = lockedPresence.frequency;
+  }
 
   presences = presences.map((presence) =>
     now > presence.end ? schedulePresence(now, presence.station) : presence
   );
 
   const { signalStrength, tuneFactor, noiseLevel, activePresence } =
-    computeSignal(currentFrequency, now);
+    computeSignal(currentFrequency, now, holdActive);
 
   updateDisplay({
     frequency: currentFrequency,
@@ -118,20 +130,31 @@ setInterval(() => {
     const message = `${activePresence.station} ${groups.join(" | ")}`;
     appendLog(message);
 
+    const speechText = buildSpeech(activePresence.station, groups);
+    const estimatedDuration = estimateSpeechDuration(speechText);
+    lockedPresence = activePresence;
+
     if (audioState.ready && now - lastSpokenAt > 4000) {
       lastSpokenAt = now;
-      audioState.speak(buildSpeech(activePresence.station, groups));
+      holdUntil = Number.POSITIVE_INFINITY;
+      audioState.speak(speechText, estimatedDuration).then(() => {
+        holdUntil = performance.now();
+      });
+    } else {
+      holdUntil = now + estimatedDuration;
     }
   }
 }, driftInterval);
 
-function computeSignal(frequency: number, now: number) {
+function computeSignal(frequency: number, now: number, holdActive: boolean) {
   let bestStrength = 0;
   let bestTune = 0;
   let bestPresence: Presence | null = null;
 
   for (const presence of presences) {
-    if (now < presence.start || now > presence.end) {
+    const lockedMatch =
+      holdActive && lockedPresence?.station === presence.station;
+    if (!lockedMatch && (now < presence.start || now > presence.end)) {
       continue;
     }
 
@@ -222,6 +245,12 @@ function buildSpeech(station: "MIKE" | "CARLO", groups: string[]) {
   return groups.join(" ");
 }
 
+function estimateSpeechDuration(text: string) {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const millis = words * 420;
+  return clamp(millis, 3000, 12000);
+}
+
 function createAudioState() {
   let context: AudioContext | null = null;
   let noiseSource: AudioBufferSourceNode | null = null;
@@ -290,17 +319,33 @@ function createAudioState() {
     noiseGain.gain.value = base * duck;
   };
 
-  const speak = (text: string) => {
+  const speak = (text: string, fallbackMs: number) => {
     if (!running) {
-      return;
+      return Promise.resolve();
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.82;
-    utterance.pitch = 0.2;
-    utterance.volume = 0.9;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utterance);
+    return new Promise<void>((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.82;
+      utterance.pitch = 0.2;
+      utterance.volume = 0.9;
+
+      let resolved = false;
+      const finish = () => {
+        if (resolved) {
+          return;
+        }
+        resolved = true;
+        resolve();
+      };
+
+      utterance.onend = finish;
+      utterance.onerror = finish;
+
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
+      setTimeout(finish, fallbackMs);
+    });
   };
 
   return {
