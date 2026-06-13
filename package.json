@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build src/web.ts --outdir dist/public --minify && cp public/index.html dist/public/index.html && cp public/styles.css dist/public/styles.css",
-    "dev": "bun run src/server.ts",
+    "build": "bun build src/web.ts --outfile dist/public/app.js --minify && cp public/index.html dist/public/index.html && cp public/styles.css dist/public/styles.css",
+    "dev": "bun run src/dev.ts",
     "start": "PUBLIC_DIR=dist/public bun run src/server.ts",
     "test": "bun run src/test.ts"
   },

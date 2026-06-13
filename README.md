@@ -28,7 +28,7 @@ bun install
 bun run dev
 ```
 
-Open `http://localhost:7890`.
+This starts a watch build for `/public/app.js` and serves on `http://localhost:7890`.
 
 ## Build
 
