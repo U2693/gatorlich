@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --minify"
+    "build": "bun build src/index.ts --outdir dist --minify",
+    "test": "bun run src/test.ts"
   },
   "devDependencies": {
     "typescript": "^5.5.4"
