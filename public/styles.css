@@ -107,6 +107,35 @@ body {
   color: #8aa0ae;
 }
 
+.audio {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.audio__button {
+  background: #1d2731;
+  color: #d9e4dd;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.audio__button:hover {
+  background: #253341;
+}
+
+.audio__status {
+  font-size: 0.85rem;
+  color: #8ea6b6;
+}
+
 .log {
   display: grid;
   gap: 8px;

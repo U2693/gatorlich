@@ -11,6 +11,8 @@ const stationEl = document.querySelector<HTMLSpanElement>("#station");
 const logEl = document.querySelector<HTMLDivElement>("#log");
 const noiseEl = document.querySelector<HTMLSpanElement>("#noise");
 const propagationEl = document.querySelector<HTMLSpanElement>("#propagation");
+const audioToggleEl = document.querySelector<HTMLButtonElement>("#audio-toggle");
+const audioStatusEl = document.querySelector<HTMLSpanElement>("#audio-status");
 
 if (
   !frequencyEl ||
@@ -19,10 +21,21 @@ if (
   !stationEl ||
   !logEl ||
   !noiseEl ||
-  !propagationEl
+  !propagationEl ||
+  !audioToggleEl ||
+  !audioStatusEl
 ) {
   throw new Error("Missing UI elements");
 }
+
+const audioState = createAudioState();
+audioToggleEl.addEventListener("click", async () => {
+  if (!audioState.ready) {
+    await audioState.init();
+  } else {
+    audioState.toggle();
+  }
+});
 
 const band = { min: 3000, max: 15000 };
 const mikeFrequencies = [4625, 7810, 10200, 11475];
@@ -32,6 +45,7 @@ let currentFrequency = randomBetween(band.min, band.max);
 let targetFrequency = randomBetween(band.min, band.max);
 let lastRetune = performance.now();
 let lastMessageAt = 0;
+let lastSpokenAt = 0;
 
 interface Presence {
   station: "MIKE" | "CARLO";
@@ -92,6 +106,8 @@ setInterval(() => {
     activePresence
   });
 
+  audioState.setNoiseLevel(noiseLevel, signalStrength);
+
   if (signalStrength > 0.45 && now - lastMessageAt > 1800 && activePresence) {
     lastMessageAt = now;
     const groupCount = Math.floor(randomBetween(7, 13));
@@ -99,7 +115,13 @@ setInterval(() => {
     for (let index = 0; index < groupCount; index += 1) {
       groups.push(nextGroup(activePresence.station).text);
     }
-    appendLog(`${activePresence.station} ${groups.join(" | ")}`);
+    const message = `${activePresence.station} ${groups.join(" | ")}`;
+    appendLog(message);
+
+    if (audioState.ready && now - lastSpokenAt > 4000) {
+      lastSpokenAt = now;
+      audioState.speak(buildSpeech(activePresence.station, groups));
+    }
   }
 }, driftInterval);
 
@@ -190,6 +212,106 @@ function appendLog(message: string) {
 
 function nextGroup(station: "MIKE" | "CARLO") {
   return station === "MIKE" ? nextMikeGroup(rng) : nextCarloGroup(rng);
+}
+
+function buildSpeech(station: "MIKE" | "CARLO", groups: string[]) {
+  if (station === "MIKE") {
+    return groups.join(" ").replaceAll("fifteen", "1 5");
+  }
+
+  return groups.join(" ");
+}
+
+function createAudioState() {
+  let context: AudioContext | null = null;
+  let noiseSource: AudioBufferSourceNode | null = null;
+  let noiseGain: GainNode | null = null;
+  let masterGain: GainNode | null = null;
+  let running = false;
+
+  const init = async () => {
+    if (context) {
+      return;
+    }
+
+    context = new AudioContext();
+    masterGain = context.createGain();
+    masterGain.gain.value = 0.4;
+    masterGain.connect(context.destination);
+
+    const bufferSize = context.sampleRate * 2;
+    const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i += 1) {
+      data[i] = (Math.random() * 2 - 1) * 0.6;
+    }
+
+    noiseSource = context.createBufferSource();
+    noiseSource.buffer = buffer;
+    noiseSource.loop = true;
+
+    noiseGain = context.createGain();
+    noiseGain.gain.value = 0;
+
+    noiseSource.connect(noiseGain).connect(masterGain);
+    noiseSource.start();
+
+    running = true;
+    audioToggleEl.textContent = "Mute audio";
+    audioStatusEl.textContent = "Audio active";
+  };
+
+  const toggle = async () => {
+    if (!context) {
+      return;
+    }
+
+    if (context.state === "suspended") {
+      await context.resume();
+      running = true;
+      audioToggleEl.textContent = "Mute audio";
+      audioStatusEl.textContent = "Audio active";
+      return;
+    }
+
+    await context.suspend();
+    running = false;
+    audioToggleEl.textContent = "Start audio";
+    audioStatusEl.textContent = "Audio muted";
+  };
+
+  const setNoiseLevel = (noiseLevel: number, signalStrength: number) => {
+    if (!noiseGain || !running) {
+      return;
+    }
+
+    const base = 0.1 + noiseLevel * 0.6;
+    const duck = 1 - signalStrength * 0.6;
+    noiseGain.gain.value = base * duck;
+  };
+
+  const speak = (text: string) => {
+    if (!running) {
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.82;
+    utterance.pitch = 0.2;
+    utterance.volume = 0.9;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  };
+
+  return {
+    get ready() {
+      return !!context && running;
+    },
+    init,
+    toggle,
+    setNoiseLevel,
+    speak
+  };
 }
 
 function randomBetween(min: number, max: number) {

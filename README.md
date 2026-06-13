@@ -36,6 +36,8 @@ bun run dev
 
 This starts a watch build for `/public/app.js` and serves on `http://localhost:7890`.
 
+Click **Start audio** to enable the Web Audio static and station speech.
+
 ## Build
 
 ```bash
