@@ -85,8 +85,12 @@ setInterval(() => {
 
   if (signalStrength > 0.45 && now - lastMessageAt > 1800) {
     lastMessageAt = now;
-    const message = nextMikeGroup(rng).text;
-    appendLog(`MIKE ${message}`);
+    const groupCount = Math.floor(randomBetween(7, 13));
+    const groups: string[] = [];
+    for (let index = 0; index < groupCount; index += 1) {
+      groups.push(nextMikeGroup(rng).text);
+    }
+    appendLog(`MIKE ${groups.join(" | ")}`);
   }
 }, driftInterval);
 
