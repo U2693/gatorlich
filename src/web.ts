@@ -1,4 +1,5 @@
 import { createSeededRng } from "./rng";
+import { nextCarloGroup } from "./stations/carlo";
 import { nextMikeGroup } from "./stations/mike";
 
 const rng = createSeededRng(Date.now());
@@ -25,6 +26,7 @@ if (
 
 const band = { min: 3000, max: 15000 };
 const mikeFrequencies = [4625, 7810, 10200, 11475];
+const carloFrequencies = [3520, 5120, 6800, 9275, 13260];
 
 let currentFrequency = randomBetween(band.min, band.max);
 let targetFrequency = randomBetween(band.min, band.max);
@@ -32,13 +34,17 @@ let lastRetune = performance.now();
 let lastMessageAt = 0;
 
 interface Presence {
+  station: "MIKE" | "CARLO";
   frequency: number;
   start: number;
   end: number;
   propagation: number;
 }
 
-let mikePresence = schedulePresence(performance.now());
+let presences: Presence[] = [
+  schedulePresence(performance.now(), "MIKE"),
+  schedulePresence(performance.now(), "CARLO")
+];
 
 const logLines: string[] = [];
 const maxLogLines = 8;
@@ -52,13 +58,18 @@ setInterval(() => {
   const deltaSeconds = driftInterval / 1000;
 
   if (now - lastRetune > nextRetuneIn) {
-    const mikeActive = now >= mikePresence.start && now <= mikePresence.end;
-    if (mikeActive && rng() < 0.55) {
+    const activePresences = presences.filter(
+      (presence) => now >= presence.start && now <= presence.end
+    );
+
+    if (activePresences.length > 0 && rng() < 0.6) {
+      const targetPresence = pick(activePresences);
       targetFrequency =
-        mikePresence.frequency + randomBetween(-2.5, 2.5);
+        targetPresence.frequency + randomBetween(-2.5, 2.5);
     } else {
       targetFrequency = randomBetween(band.min, band.max);
     }
+
     lastRetune = now;
     nextRetuneIn = retuneEvery();
   }
@@ -66,57 +77,71 @@ setInterval(() => {
   const drift = (targetFrequency - currentFrequency) * 0.08;
   currentFrequency += drift * deltaSeconds * 5;
 
-  if (now > mikePresence.end) {
-    mikePresence = schedulePresence(now);
-  }
-
-  const { signalStrength, tuneFactor, noiseLevel } = computeSignal(
-    currentFrequency,
-    now
+  presences = presences.map((presence) =>
+    now > presence.end ? schedulePresence(now, presence.station) : presence
   );
+
+  const { signalStrength, tuneFactor, noiseLevel, activePresence } =
+    computeSignal(currentFrequency, now);
 
   updateDisplay({
     frequency: currentFrequency,
     signalStrength,
     tuneFactor,
     noiseLevel,
-    propagation: mikePresence.propagation
+    activePresence
   });
 
-  if (signalStrength > 0.45 && now - lastMessageAt > 1800) {
+  if (signalStrength > 0.45 && now - lastMessageAt > 1800 && activePresence) {
     lastMessageAt = now;
     const groupCount = Math.floor(randomBetween(7, 13));
     const groups: string[] = [];
     for (let index = 0; index < groupCount; index += 1) {
-      groups.push(nextMikeGroup(rng).text);
+      groups.push(nextGroup(activePresence.station).text);
     }
-    appendLog(`MIKE ${groups.join(" | ")}`);
+    appendLog(`${activePresence.station} ${groups.join(" | ")}`);
   }
 }, driftInterval);
 
 function computeSignal(frequency: number, now: number) {
-  const active = now >= mikePresence.start && now <= mikePresence.end;
-  let tuneFactor = 0;
-  let propagation = 0;
+  let bestStrength = 0;
+  let bestTune = 0;
+  let bestPresence: Presence | null = null;
 
-  if (active) {
-    const delta = Math.abs(frequency - mikePresence.frequency);
-    tuneFactor = clamp(1 - delta / 8, 0, 1);
-    propagation = mikePresence.propagation;
+  for (const presence of presences) {
+    if (now < presence.start || now > presence.end) {
+      continue;
+    }
+
+    const delta = Math.abs(frequency - presence.frequency);
+    const tuneFactor = clamp(1 - delta / 8, 0, 1);
+    const fade = 0.6 + 0.4 * Math.sin(now / 1200) + rng() * 0.1;
+    const strength = clamp(tuneFactor * presence.propagation * fade, 0, 1);
+
+    if (strength > bestStrength) {
+      bestStrength = strength;
+      bestTune = tuneFactor;
+      bestPresence = presence;
+    }
   }
 
-  const fade = 0.6 + 0.4 * Math.sin(now / 1200) + rng() * 0.1;
-  const signalStrength = clamp(tuneFactor * propagation * fade, 0, 1);
-  const noiseLevel = clamp(0.2 + (1 - signalStrength) * 0.7 + rng() * 0.08, 0, 1);
+  const noiseLevel = clamp(0.2 + (1 - bestStrength) * 0.7 + rng() * 0.08, 0, 1);
 
-  return { signalStrength, tuneFactor, noiseLevel };
+  return {
+    signalStrength: bestStrength,
+    tuneFactor: bestTune,
+    noiseLevel,
+    activePresence: bestPresence
+  };
 }
 
-function schedulePresence(now: number): Presence {
+function schedulePresence(now: number, station: "MIKE" | "CARLO"): Presence {
   const gap = randomBetween(6000, 16000);
   const duration = randomBetween(12000, 28000);
-  const frequency = pick(mikeFrequencies);
+  const frequency =
+    station === "MIKE" ? pick(mikeFrequencies) : pick(carloFrequencies);
   return {
+    station,
     frequency,
     start: now + gap,
     end: now + gap + duration,
@@ -129,16 +154,18 @@ function updateDisplay(params: {
   signalStrength: number;
   tuneFactor: number;
   noiseLevel: number;
-  propagation: number;
+  activePresence: Presence | null;
 }) {
   frequencyEl.textContent = params.frequency.toFixed(1);
   signalBarEl.style.width = `${Math.round(params.signalStrength * 100)}%`;
   signalTextEl.textContent = `${Math.round(params.signalStrength * 100)}%`;
   noiseEl!.textContent = `${Math.round(params.noiseLevel * 100)}%`;
-  propagationEl!.textContent = `${Math.round(params.propagation * 100)}%`;
+  propagationEl!.textContent = params.activePresence
+    ? `${Math.round(params.activePresence.propagation * 100)}%`
+    : "--";
 
-  if (params.signalStrength > 0.6) {
-    stationEl.textContent = `MIKE ${mikePresence.frequency.toFixed(1)} kHz`;
+  if (params.signalStrength > 0.6 && params.activePresence) {
+    stationEl.textContent = `${params.activePresence.station} ${params.activePresence.frequency.toFixed(1)} kHz`;
   } else if (params.tuneFactor > 0.2) {
     stationEl.textContent = "Weak carrier";
   } else {
@@ -159,6 +186,10 @@ function appendLog(message: string) {
     entry.textContent = line;
     logEl.appendChild(entry);
   }
+}
+
+function nextGroup(station: "MIKE" | "CARLO") {
+  return station === "MIKE" ? nextMikeGroup(rng) : nextCarloGroup(rng);
 }
 
 function randomBetween(min: number, max: number) {

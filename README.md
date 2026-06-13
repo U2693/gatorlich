@@ -16,10 +16,16 @@ A browser-based shortwave radio vignette that drifts across frequencies and catc
 - **Audio simulation**: static, fading, and signal strength shaping.
 - **Visualizer**: frequency dial, signal meter, and subtle UI flicker.
 
-## Station MIKE
+## Stations
+
+### MIKE
 
 - Five-symbol groups drawn from `1 3 5 7 9`.
 - Rarely emits the word `fifteen` instead of a digit.
+
+### CARLO
+
+- Five-symbol groups drawn from Spanish numerals `cero` through `nueve`.
 
 ## Serve
 

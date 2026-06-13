@@ -1,4 +1,5 @@
 import { createSeededRng } from "./rng";
+import { nextCarloGroup } from "./stations/carlo";
 import { nextMikeGroup } from "./stations/mike";
 
 const [, , stationArg] = process.argv;
@@ -18,6 +19,13 @@ switch (station) {
   case "MIKE": {
     for (let index = 0; index < lineCount; index += 1) {
       const group = nextMikeGroup(rng);
+      console.log(group.text);
+    }
+    break;
+  }
+  case "CARLO": {
+    for (let index = 0; index < lineCount; index += 1) {
+      const group = nextCarloGroup(rng);
       console.log(group.text);
     }
     break;
